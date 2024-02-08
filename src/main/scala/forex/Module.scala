@@ -1,17 +1,25 @@
 package forex
 
-import cats.effect.{ Concurrent, Timer }
+import cats.data.Kleisli
+import cats.effect.{Concurrent, Timer}
+import cats.implicits._
 import forex.config.ApplicationConfig
 import forex.http.rates.RatesHttpRoutes
 import forex.services._
 import forex.programs._
+import forex.programs.rates.errors._
+import ErrorCodecs._
+import forex.client.OneFrameClient
+import io.circe.syntax._
 import org.http4s._
+import org.http4s.circe._
+import org.http4s.dsl.Http4sDsl
 import org.http4s.implicits._
-import org.http4s.server.middleware.{ AutoSlash, Timeout }
+import org.http4s.server.middleware.{AutoSlash, Timeout}
 
-class Module[F[_]: Concurrent: Timer](config: ApplicationConfig) {
+class Module[F[_]: Concurrent: Timer](config: ApplicationConfig, oneFrameClient: OneFrameClient[F]) {
 
-  private val ratesService: RatesService[F] = RatesServices.dummy[F]
+  private val ratesService: RatesService[F] = RatesServices.live(oneFrameClient)
 
   private val ratesProgram: RatesProgram[F] = RatesProgram[F](ratesService)
 
@@ -30,8 +38,31 @@ class Module[F[_]: Concurrent: Timer](config: ApplicationConfig) {
     Timeout(config.http.timeout)(http)
   }
 
+  private val errorsMiddleware: TotalMiddleware = { app: HttpApp[F] =>
+    val dsl = Http4sDsl[F]
+    import dsl._
+
+    Kleisli { (request: Request[F]) =>
+      app.run(request).recoverWith {
+        case error: Error =>
+          error match {
+            case Error.RateLookupFailed(msg) =>
+              NotFound(ErrorDto("RateLookupFailed", msg, request.pathInfo.renderString).asJson)
+            case Error.RateClientError(msg) =>
+              InternalServerError(ErrorDto("RateClientError", msg, request.pathInfo.renderString).asJson)
+            case Error.RateServerError(msg) =>
+              InternalServerError(ErrorDto("RateServerError", msg, request.pathInfo.renderString).asJson)
+            case Error.RateDecodingError(msg) =>
+              BadRequest(ErrorDto("RateDecodingError", msg, request.pathInfo.renderString).asJson)
+          }
+        case error: Throwable =>
+          InternalServerError(ErrorDto("InternalServerError", error.getMessage, request.pathInfo.renderString).asJson)
+      }
+    }
+  }
+
   private val http: HttpRoutes[F] = ratesHttpRoutes
 
-  val httpApp: HttpApp[F] = appMiddleware(routesMiddleware(http).orNotFound)
+  val httpApp: HttpApp[F] = errorsMiddleware(appMiddleware(routesMiddleware(http).orNotFound))
 
 }

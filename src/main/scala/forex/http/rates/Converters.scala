@@ -15,4 +15,13 @@ object Converters {
       )
   }
 
+  implicit class RateOps(val response: GetApiResponse) extends AnyVal {
+    def asRate: Rate =
+      Rate(
+        pair = Rate.Pair(response.from, response.to),
+        price = response.price,
+        timestamp = response.timestamp
+      )
+  }
+
 }
