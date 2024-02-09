@@ -11,4 +11,10 @@ object Rate {
       from: Currency,
       to: Currency
   )
+
+  object Pair {
+    val all = (Currency.all.combinations(2) ++ Currency.all.reverse.combinations(2)).collect {
+      case List(from, to) => Pair(from, to)
+    }.toSeq
+  }
 }

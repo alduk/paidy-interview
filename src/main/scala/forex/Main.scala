@@ -1,6 +1,7 @@
 package forex
 
 import cats.effect._
+import forex.cache.Refresher
 import forex.client.OneFrameClient
 import forex.config._
 import forex.domain.Rate
@@ -9,9 +10,10 @@ import fs2.Stream
 import io.chrisdavenport.mules._
 import org.http4s.blaze.client.BlazeClientBuilder
 import org.http4s.blaze.server.BlazeServerBuilder
+import org.typelevel.log4cats.Logger
+import org.typelevel.log4cats.slf4j.Slf4jLogger
 
 import scala.concurrent.ExecutionContext
-import scala.concurrent.duration._
 
 object Main extends IOApp {
 
@@ -22,23 +24,27 @@ object Main extends IOApp {
 
 class Application[F[_]: ConcurrentEffect: Timer] {
 
+  implicit val logger: Logger[F] = Slf4jLogger.getLogger[F]
+
   def stream(ec: ExecutionContext): Stream[F, Unit] =
     for {
       config <- Config.stream("app")
-      client <- Stream
-                 .resource(BlazeClientBuilder[F](ec).resource)
-                 .map(c => OneFrameClient(config.oneFrame, c))
-                 .flatMap(Stream.fromEither[F](_))
       cache <- Stream.eval(
                 MemoryCache.ofSingleImmutableMap[F, Pair, Rate](
-                  Some(TimeSpec.unsafeFromDuration(config.cacheTtlInMinutes.minutes))
+                  Some(TimeSpec.unsafeFromDuration(config.cacheTtl))
                 )
               )
-      module = new Module[F](config, client, cache)
+      client <- Stream
+                 .resource(BlazeClientBuilder[F](ec).resource)
+                 .map(client => OneFrameClient(config.oneFrame, client, cache))
+                 .flatMap(Stream.fromEither[F](_))
+      module = new Module[F](config, cache)
+      refresher = new Refresher(client, config.cacheTtl)
       _ <- BlazeServerBuilder[F](ec)
             .bindHttp(config.http.port, config.http.host)
             .withHttpApp(module.httpApp)
             .serve
+            .concurrently(refresher.refreshStream)
     } yield ()
 
 }
