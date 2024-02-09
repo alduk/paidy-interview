@@ -3,13 +3,15 @@ package forex
 import cats.data.Kleisli
 import cats.effect.{Concurrent, Timer}
 import cats.implicits._
-import forex.config.ApplicationConfig
-import forex.http.rates.RatesHttpRoutes
-import forex.services._
-import forex.programs._
-import forex.programs.rates.errors._
-import ErrorCodecs._
 import forex.client.OneFrameClient
+import forex.config.ApplicationConfig
+import forex.domain.Rate
+import forex.http.rates.RatesHttpRoutes
+import forex.programs._
+import forex.programs.rates.errors.ErrorCodecs._
+import forex.programs.rates.errors._
+import forex.services._
+import io.chrisdavenport.mules.Cache
 import io.circe.syntax._
 import org.http4s._
 import org.http4s.circe._
@@ -17,9 +19,11 @@ import org.http4s.dsl.Http4sDsl
 import org.http4s.implicits._
 import org.http4s.server.middleware.{AutoSlash, Timeout}
 
-class Module[F[_]: Concurrent: Timer](config: ApplicationConfig, oneFrameClient: OneFrameClient[F]) {
+class Module[F[_]: Concurrent: Timer](config: ApplicationConfig,
+                                      oneFrameClient: OneFrameClient[F],
+                                      cache: Cache[F, Rate.Pair, Rate]) {
 
-  private val ratesService: RatesService[F] = RatesServices.live(oneFrameClient)
+  private val ratesService: RatesService[F] = RatesServices.live(oneFrameClient, cache)
 
   private val ratesProgram: RatesProgram[F] = RatesProgram[F](ratesService)
 

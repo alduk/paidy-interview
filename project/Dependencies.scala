@@ -10,11 +10,14 @@ object Dependencies {
     val circe      = "0.14.2"
     val pureConfig = "0.17.4"
 
-    val kindProjector  = "0.13.2"
-    val logback        = "1.2.3"
-    val scalaCheck     = "1.15.3"
-    val scalaTest      = "3.2.7"
-    val catsScalaCheck = "0.3.2"
+    val kindProjector       = "0.13.2"
+    val logback             = "1.2.3"
+    val scalaCheck          = "1.15.3"
+    val scalaTest           = "3.2.7"
+    val catsScalaCheck      = "0.3.2"
+
+
+    val mule = "0.4.1"
   }
 
   object Libraries {
@@ -41,10 +44,12 @@ object Dependencies {
     // Runtime
     lazy val logback = "ch.qos.logback" % "logback-classic" % Versions.logback
 
+    lazy val mule = "io.chrisdavenport" %% "mules" % Versions.mule
+
     // Test
-    lazy val scalaTest      = "org.scalatest"     %% "scalatest"       % Versions.scalaTest
-    lazy val scalaCheck     = "org.scalacheck"    %% "scalacheck"      % Versions.scalaCheck
-    lazy val catsScalaCheck = "io.chrisdavenport" %% "cats-scalacheck" % Versions.catsScalaCheck
+    lazy val scalaTest          = "org.scalatest"     %% "scalatest"                      % Versions.scalaTest
+    lazy val scalaCheck         = "org.scalacheck"    %% "scalacheck"                     % Versions.scalaCheck
+    lazy val catsScalaCheck     = "io.chrisdavenport" %% "cats-scalacheck"                % Versions.catsScalaCheck
   }
 
 }
